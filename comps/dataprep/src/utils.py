@@ -16,6 +16,7 @@ import tempfile
 import timeit
 import unicodedata
 import urllib.parse
+import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Dict, List, Union
@@ -233,20 +234,28 @@ async def load_docx(docx_path):
 async def load_ppt(ppt_path):
     """Load ppt file."""
     print("Converting ppt file to pptx file...")
-    pptx_path = ppt_path + "x"
+
+    temp_dir = tempfile.gettempdir()
+    base_name = os.path.splitext(os.path.basename(ppt_path))[0]
+    pptx_path = os.path.join(temp_dir, base_name + ".pptx")
+
     subprocess.run(
         [
             "libreoffice",
             "--headless",
             "--invisible",
             "--convert-to",
-            "docx",
+            "pptx",
             "--outdir",
             os.path.dirname(pptx_path),
             ppt_path,
         ],
         check=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
     )
+    if not os.path.exists(pptx_path):
+        raise FileNotFoundError(f"pptx file not created: {pptx_path}")
     print("Converted ppt file to pptx file.")
     text = await load_pptx(pptx_path)
     os.remove(pptx_path)
@@ -841,11 +850,13 @@ def get_file_structure(root_path: str, parent_path: str = "") -> List[Dict[str, 
 def format_search_results(response, file_list: list):
     for i in range(1, len(response), 2):
         file_name = response[i].decode()[5:]
+        index_name_index = response[i + 1].index(b"index_name")
         file_dict = {
             "name": decode_filename(file_name),
             "id": decode_filename(file_name),
             "type": "File",
             "parent": "",
+            "index_name": response[i + 1][index_name_index + 1].decode(),
         }
         file_list.append(file_dict)
     return file_list

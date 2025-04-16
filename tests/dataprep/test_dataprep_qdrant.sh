@@ -7,9 +7,10 @@ set -x
 WORKPATH=$(dirname "$PWD")
 LOG_PATH="$WORKPATH/tests"
 ip_address=$(hostname -I | awk '{print $1}')
-DATAPREP_PORT="11107"
+export DATAPREP_PORT="11107"
 TEI_EMBEDDER_PORT="10220"
 export TAG="comps"
+export DATA_PATH=${model_cache}
 
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 source ${SCRIPT_DIR}/dataprep_utils.sh
@@ -39,7 +40,8 @@ function start_service() {
     service_name="qdrant-vector-db tei-embedding-serving dataprep-qdrant"
     cd $WORKPATH/comps/dataprep/deployment/docker_compose/
     docker compose up ${service_name} -d
-    sleep 1m
+
+    check_healthy "dataprep-qdrant-server" || exit 1
 }
 
 function validate_microservice() {
@@ -52,6 +54,9 @@ function validate_microservice() {
 
     ingest_pdf ${ip_address} ${DATAPREP_PORT}
     check_result "dataprep - upload - pdf" "Data preparation succeeded" dataprep-qdrant-server ${LOG_PATH}/dataprep-qdrant.log
+
+    ingest_ppt ${ip_address} ${DATAPREP_PORT}
+    check_result "dataprep - upload - ppt" "Data preparation succeeded" dataprep-qdrant-server ${LOG_PATH}/dataprep_upload_file.log
 
     ingest_pptx ${ip_address} ${DATAPREP_PORT}
     check_result "dataprep - upload - pptx" "Data preparation succeeded" dataprep-qdrant-server ${LOG_PATH}/dataprep-qdrant.log

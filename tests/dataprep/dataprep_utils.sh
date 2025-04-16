@@ -25,7 +25,7 @@ function _invoke_curl() {
       ingest)
         header='Content-Type: multipart/form-data'
         ;;
-      delete|get)
+      delete|get|indices)
         header='Content-Type: application/json'
 	;;
       *)
@@ -59,6 +59,13 @@ function ingest_pdf() {
     local port=$2
     shift 2
     _invoke_curl $fqdn $port ingest -F "files=@${SCRIPT_DIR}/ingest_dataprep.pdf" $@
+}
+
+function ingest_ppt() {
+    local fqdn=$1
+    local port=$2
+    shift 2
+    _invoke_curl $fqdn $port ingest -F "files=@${SCRIPT_DIR}/ingest_dataprep.ppt" $@
 }
 
 function ingest_pptx() {
@@ -96,6 +103,23 @@ function delete_all() {
     _invoke_curl $fqdn $port delete -d '{"file_path":"all"}' $@
 }
 
+function delete_all_in_index() {
+    local fqdn=$1
+    local port=$2
+    local index_name=$3
+    shift 3
+    _invoke_curl $fqdn $port delete -d '{"file_path":"all","index_name":"'${index_name}'"}' $@
+}
+
+function delete_item_in_index() {
+    local fqdn=$1
+    local port=$2
+    local index_name=$3
+    local item=$4
+    shift 4
+    _invoke_curl $fqdn $port delete -d '{"file_path":"'${item}'","index_name":"'${index_name}'"}' $@
+}
+
 function delete_single() {
     local fqdn=$1
     local port=$2
@@ -108,6 +132,36 @@ function get_all() {
     local port=$2
     shift 2
     _invoke_curl $fqdn $port get $@
+}
+
+function get_all_in_index() {
+    local fqdn=$1
+    local port=$2
+    shift 2
+    _invoke_curl $fqdn $port get -d '{"index_name":"all"}' $@
+}
+
+function get_index() {
+    local fqdn=$1
+    local port=$2
+    local index_name=$3
+    shift 3
+    _invoke_curl $fqdn $port get -d '{"index_name":"'${index_name}'"}' $@
+}
+
+function ingest_txt_with_index_name() {
+    local fqdn=$1
+    local port=$2
+    local index_name=$3
+    shift 3
+    _invoke_curl $fqdn $port ingest -F "files=@${SCRIPT_DIR}/ingest_dataprep.txt" -F "index_name=${index_name}" $@
+}
+
+function indices() {
+    local fqdn=$1
+    local port=$2
+    shift 2
+    _invoke_curl $fqdn $port indices $@
 }
 
 function check_result() {
@@ -133,4 +187,26 @@ function check_result() {
     else
         echo "[ $service_name ] Content is as expected."
     fi
+}
+
+function check_healthy() {
+    local container_name=$1
+    local retries=30
+    local count=0
+
+    echo "Waiting for $container_name to become healthy..."
+
+    while [ $count -lt $retries ]; do
+        status=$(docker inspect --format='{{.State.Health.Status}}' "$container_name" 2>/dev/null)
+        if [ "$status" == "healthy" ]; then
+            echo "$container_name is healthy!"
+            return 0
+        fi
+        echo "  → $container_name status: $status ($count/$retries)"
+        sleep 5
+        ((count++))
+    done
+
+    echo "$container_name did not become healthy in time."
+    return 1
 }
